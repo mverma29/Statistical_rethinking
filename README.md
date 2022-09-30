@@ -1,7 +1,7 @@
 # Statistical_rethinking
 
 # author: Megan Verma
-# Going through the exercises in Richard McElreath's Statistical Rethinking 
+# Working through the exercises in Richard McElreath's Statistical Rethinking 
 # textbook, 2nd edition
 
 
