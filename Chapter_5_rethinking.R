@@ -141,3 +141,65 @@ impliedConditionalIndependencies(DMA_dag2)
 DMA_dag1 <- dagitty('dag{ D <- A -> M -> D }')
 impliedConditionalIndependencies(DMA_dag1)
 # no conditional independencies, so no output
+
+# multivariate regression (A,M,D)----
+
+# approximate posterior distribution 
+m5.3 <- quap(alist(
+  D ~ dnorm(mu , sigma) ,
+  mu <- a + bM * M + bA * A ,
+  a ~ dnorm(0 , 0.2) ,
+  bM ~ dnorm(0 , 0.5) ,
+  bA ~ dnorm(0 , 0.5) ,
+  sigma ~ dexp(1)
+) ,
+data = d)
+precis(m5.3)
+
+# plot the posterior dist for all 3 models (to compare)
+# only slopes for bM & bA
+plot( coeftab(m5.1,m5.2,m5.3), par=c("bA","bM") )
+
+# posterior residual plots----
+# model for marriage rate using age at marriage 
+m5.4 <- quap(alist(
+  M ~ dnorm(mu , sigma) ,
+  mu <- a + bAM * A ,
+  a ~ dnorm(0 , 0.2) ,
+  bAM ~ dnorm(0 , 0.5) ,
+  sigma ~ dexp(1)
+) ,
+data = d)
+
+# compute residuals by subtracting the observed marriage 
+# rate (in each state) from the predicted rate
+mu <- link(m5.4)
+mu_mean <- apply( mu , 2 , mean )
+mu_resid <- d$M - mu_mean
+
+# posterior prediction plots----
+# call link without specifying new data so it uses original data
+mu <- link(m5.3)
+
+# summarize samples across cases
+mu_mean <- apply(mu , 2 , mean)
+mu_PI <- apply(mu , 2 , PI)
+
+# simulate observations
+# again no new data, so uses original data
+D_sim <- sim(m5.3 , n = 1e4)
+D_PI <- apply(D_sim , 2 , PI)
+
+# plot predictions against observed 
+# add a line to show perfect prediction
+# add line segments for the CI of each prediction
+plot(
+  mu_mean ~ d$D ,
+  col  = rangi2 ,
+  ylim = range(mu_PI) ,
+  xlab = "Observed divorce" ,
+  ylab = "Predicted divorce"
+)
+abline(a = 0 , b = 1 , lty = 2)
+for (i in 1:nrow(d))
+  lines(rep(d$D[i], 2) , mu_PI[, i] , col = rangi2)
