@@ -220,3 +220,58 @@ for (i in 1:20)
   curve(post$a[i] + post$b[i] * (x - mean(dN$weight)) ,
         col = col.alpha("black", 0.3) ,
         add = TRUE)
+
+# let's look at a single weight value (50 kg)
+# make a list of 10,000 values of mu for an individual who weighs 50 kg using samples from post
+post <- extract.samples(m4.3)
+mu_at_50 <- post$a + post$b * (50 - xbar)
+# plot density for this vector
+dens(mu_at_50 ,
+     col = rangi2 ,
+     lwd = 2 ,
+     xlab = "mu|weight=50")
+# find 89% compatibility interval of mu at 50 kg
+PI(mu_at_50 , prob = 0.89)
+# repeat for every value of weight in the dataset 
+mu <- link(m4.3)
+str(mu)
+# define sequence of weights to compute predictions for these values will be on the hor axis
+weight.seq <- seq(from = 25 , to = 70 , by = 1)
+# use link to compute mu for each sample from posterior and for each weight in weight.seq
+mu <- link(m4.3 , data = data.frame(weight = weight.seq))
+str(mu)
+
+# let's plot dist of mu values at each height
+# use type="n" to hide raw data
+plot(height ~ weight , d2 , type = "n")
+# loop over samples and plot each mu value
+for (i in 1:100)
+  points(weight.seq , mu[i, ] , pch = 16 , col = col.alpha(rangi2, 0.1))
+
+# summarize the distribution of mu
+mu.mean <- apply(mu , 2 , mean)
+mu.PI <- apply(mu , 2 , PI , prob = 0.89)
+
+# plot the summaries on top of the data 
+# plot raw data, fading out points to make line and interval more visible
+plot(height ~ weight , data = d2 , col = col.alpha(rangi2, 0.5))
+# plot the MAP line, aka the mean mu for each weight
+lines(weight.seq , mu.mean)
+# plot a shaded region for 89% PI
+shade(mu.PI , weight.seq)
+
+# express uncertainty in both mu and posterior 
+sim.height <- sim(m4.3 , data = list(weight = weight.seq))
+str(sim.height)
+# summarize simulated heights
+height.PI <- apply(sim.height , 2 , PI , prob = 0.89)
+
+# plot everything: avg line, shaded region of 89% plausible mu, boundaries of simulated heights
+# plot raw data
+plot(height ~ weight , d2 , col = col.alpha(rangi2, 0.5))
+# draw MAP line
+lines(weight.seq , mu.mean)
+# draw PI region for line
+shade(mu.PI , weight.seq)
+# draw PI region for simulated heights
+shade(height.PI , weight.seq)
