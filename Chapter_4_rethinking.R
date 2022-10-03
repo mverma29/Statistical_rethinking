@@ -297,7 +297,7 @@ d$weight_s <- (d$weight - mean(d$weight)) / sd(d$weight)
 d$weight_s2 <- d$weight_s ^ 2
 
 # quadratic model
-m4.5 <- quap(
+m4.5   <- quap(
   alist(
     height ~ dnorm(mu , sigma) ,
     mu <- a + b1 * weight_s + b2 * weight_s2 ,
@@ -314,8 +314,8 @@ precis(m4.5)
 
 # must plot to understand 
 
-weight.seq <- seq(from = -2.2 ,
-                  to = 2 ,
+weight.seq <- seq(from       = -2.2 ,
+                  to         = 2 ,
                   length.out = 30) 
 pred_dat <- list(weight_s = weight.seq , weight_s2 = weight.seq ^ 2)
 mu <- link(m4.5 , data = pred_dat)
@@ -333,7 +333,7 @@ shade(height.PI , weight.seq)
 
 d$weight_s3 <- d$weight_s ^ 3
 
-m4.6 <- quap(
+m4.6   <- quap(
   alist(
     height ~ dnorm(mu , sigma) ,
     mu <- a + b1 * weight_s + b2 * weight_s2 + b3 * weight_s3 ,
@@ -347,8 +347,8 @@ m4.6 <- quap(
 )
 
 # plot cubic linear function 
-weight.seq <- seq(from = -2.2 ,
-                  to = 2 ,
+weight.seq <- seq(from       = -2.2 ,
+                  to         = 2 ,
                   length.out = 30) 
 pred_dat <- list(weight_s = weight.seq , weight_s2 = weight.seq ^ 2,  weight_s3 = weight.seq ^ 3)
 mu <- link(m4.6 , data = pred_dat)
@@ -364,3 +364,71 @@ shade(height.PI , weight.seq)
 
 # B-splines-----
 
+library(rethinking)
+data(cherry_blossoms)
+d <- cherry_blossoms
+precis(d)
+
+# plot temp against year 
+plot(d$temp ~ d$year)
+
+# define a list of knot positions in "year" variable
+d2 <- d[complete.cases(d$temp) ,] # complete cases on temp
+num_knots <- 15
+knot_list <-
+  quantile(d2$year , probs = seq(0, 1, length.out = num_knots))
+
+# build a basis funciton for any list of knots & degree you choose
+# 3rd degreee function used here 
+
+library(splines)
+B <- bs(d2$year,
+        knots     = knot_list[-c(1, num_knots)] ,
+        degree    = 3 ,
+        intercept = TRUE)
+
+# plot each column against year to display basis functions
+
+plot(
+  NULL ,
+  xlim = range(d2$year) ,
+  ylim = c(0, 1) ,
+  xlab = "year" ,
+  ylab = "basis value"
+)
+for (i in 1:ncol(B))
+  lines(d2$year , B[, i])
+
+# build model 
+m4.7   <- quap(
+  alist(
+    T ~ dnorm(mu , sigma) ,
+    mu <- a + B %*% w , # matrix multiplication
+    a ~ dnorm(6, 10),
+    w ~ dnorm(0, 1),
+    sigma ~ dexp(1)
+  ),
+  data = list(T = d2$temp , B = B) ,
+  start = list(w = rep(0 , ncol(B)))
+)
+
+# plot the posterior predictions 
+
+# weighted basis functions 
+post <- extract.samples(m4.7)
+w <- apply(post$w , 2 , mean)
+plot(
+  NULL ,
+  xlim = range(d2$year) ,
+  ylim = c(-2, 2) ,
+  xlab = "year" ,
+  ylab = "basis * weight"
+)
+for (i in 1:ncol(B))
+  lines(d2$year , w[i] * B[, i])
+
+# 97% posterior interval 
+mu    <- link(m4.7)
+mu_PI <- apply(mu, 2, PI, 0.97)
+plot(d2$year , d2$temp , col = col.alpha(rangi2, 0.3) , pch = 16)
+shade(mu_PI , d2$year , col = col.alpha("black", 0.5))
