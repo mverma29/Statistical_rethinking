@@ -98,3 +98,46 @@ lines(M_seq ,
       lwd  = 2)
 shade(mu.PI ,
       M_seq)
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+# make a DAG -----
+# install.packages("daggity")
+library(dagitty)
+
+# (all variables related)
+dag5.1 <- dagitty("dag {
+A -> D
+A -> M
+M -> D
+}")
+
+coordinates(dag5.1) <- list(x = c(A = 0, D = 1, M = 2) , y = c(A = 0, D =
+                                                                 1, M = 0))
+drawdag(dag5.1)
+
+# (no relationship between M & D)
+DMA_dag2 <- dagitty('dag{ D <- A -> M }')
+impliedConditionalIndependencies(DMA_dag2)
+
+# check the conditional dependences of first dag DMA_dag2 <- dagitty('dag{ D <- A -> M }')
+DMA_dag1 <- dagitty('dag{ D <- A -> M -> D }')
+impliedConditionalIndependencies(DMA_dag1)
+# no conditional independencies, so no output
