@@ -568,7 +568,7 @@ plot(precis(m5.10 , depth = 2 , pars = "a") ,
 
 
 
-# week 2 HW: 
+# week 2 HW------
 
 # Q1
 data(Howell1)
@@ -626,5 +626,66 @@ data = list(W=d3$weight, A=d3$age))
 precis(m2)
 
 # Q3 
+data(Howell1)
+d <- Howell1
+d <- d[ d$age < 13 , ]
 
+dat <- list(W=d$weight,A=d$age,S=d$male+1)
 
+m3 <- quap(
+  alist(
+    W ~ dnorm( mu , sigma ),
+    mu <- a[S] + b[S]*A,
+    a[S] ~ dnorm(5,1),
+    b[S] ~ dlnorm(0,1),
+    sigma ~ dexp(1)
+  ), data=dat )
+
+# blank(bty="n")
+plot(
+  d$age ,
+  d$weight ,
+  lwd = 3,
+  col = ifelse(d$male == 1, 4, 2) ,
+  xlab = "age (years)" ,
+  ylab = "weight (kg)"
+)
+Aseq <- 0:12
+
+# girls
+muF <- link(m3, data = list(A = Aseq, S = rep(1, 13)))
+shade(apply(muF, 2, PI, 0.99) , Aseq , col = col.alpha(2, 0.5))
+lines(Aseq , apply(muF, 2, mean) , lwd = 3 , col = 2)
+
+# boys
+muM <- link(m3, data = list(A = Aseq, S = rep(2, 13)))
+shade(apply(muM, 2, PI, 0.99) , Aseq , col = col.alpha(4, 0.5))
+lines(Aseq , apply(muM, 2, mean) , lwd = 3 , col = 4)
+
+# what is expected diff in height between males and females? 
+# contrast at each age
+Aseq <- 0:12
+mu1 <- sim(m3, data = list(A = Aseq, S = rep(1, 13)))
+mu2 <- sim(m3, data = list(A = Aseq, S = rep(2, 13)))
+mu_contrast <- mu1
+for (i in 1:13)
+  mu_contrast[, i] <- mu2[, i] - mu1[, i]
+plot(
+  NULL ,
+  xlim = c(0, 13) ,
+  ylim = c(-15, 15) ,
+  xlab = "age" ,
+  ylab = "weight difference (boys-girls)"
+)
+for (p in c(0.5, 0.67, 0.89, 0.99))
+  shade(apply(mu_contrast, 2, PI, prob = p) , Aseq)
+
+abline(h = 0, lty = 2, lwd = 2)
+
+for (i in 1:13)
+  points(mu_contrast[1:1000, i] ,
+         col = ifelse(mu_contrast[1:1000, i] > 0, 4, 2) ,
+         lwd = 3)
+
+# calc is called a contrast: 1.6 kg
+# we have post dist of the difference! 
