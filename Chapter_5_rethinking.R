@@ -160,6 +160,7 @@ precis(m5.3)
 # only slopes for bM & bA
 plot( coeftab(m5.1,m5.2,m5.3), par=c("bA","bM") )
 
+
 # posterior residual plots----
 # model for marriage rate using age at marriage 
 m5.4 <- quap(alist(
@@ -203,3 +204,111 @@ plot(
 abline(a = 0 , b = 1 , lty = 2)
 for (i in 1:nrow(d))
   lines(rep(d$D[i], 2) , mu_PI[, i] , col = rangi2)
+
+# label a few points (the ones I click on)
+identify( x=d$D , y=mu_mean , labels=d$Loc )
+
+# counterfactual plots-----
+
+# use the DAG with all arrows: 
+
+# (all variables related)
+drawdag(dag5.1)
+
+# set of functions to tell how each variable is generated 
+# use Gaussian dist for each variable, for simplicity
+# to estimate the influence of A on M, we regress A on M 
+  # just add this to quap model 
+
+data(WaffleDivorce)
+d <- list()
+d$A <- standardize(WaffleDivorce$MedianAgeMarriage)
+d$D <- standardize(WaffleDivorce$Divorce)
+d$M <- standardize(WaffleDivorce$Marriage) 
+
+m5.3_A <- quap(
+  alist(
+    ## A -> D <- M
+    D ~ dnorm(mu , sigma) ,
+    mu <- a + bM * M + bA * A ,
+    a ~ dnorm(0 , 0.2) ,
+    bM ~ dnorm(0 , 0.5) ,
+    bA ~ dnorm(0 , 0.5) ,
+    sigma ~ dexp(1),
+    ## A -> M
+    M ~ dnorm(mu_M , sigma_M),
+    mu_M <- aM + bAM * A,
+    aM ~ dnorm(0 , 0.2),
+    bAM ~ dnorm(0 , 0.5),
+    sigma_M ~ dexp(1)
+  ) ,
+  data = d
+)
+
+precis(m5.3_A)
+
+# simulate 
+
+# define a range of values for A (to manipulate so M is reduced)
+A_seq <- seq(from       = -2 ,
+             to         = 2 ,
+             length.out = 30) #30 obs between |2| SD from mean
+
+# prep data
+sim_dat <- data.frame(A = A_seq)
+
+# simulate M and then D, using A_seq
+s <- sim(m5.3_A , 
+         data = sim_dat , 
+         vars = c("M", "D"))
+
+# display counterfactual predictions (A + M on D)
+plot(
+  sim_dat$A ,
+  colMeans(s$D) ,
+  ylim = c(-2, 2) ,
+  type = "l" ,
+  xlab = "manipulated A" ,
+  ylab = "counterfactual D"
+)
+shade(apply(s$D, 2, PI) , sim_dat$A)
+mtext("Total counterfactual effect of A on D")
+
+# display counterfactual predictions (A on M)
+plot(
+  sim_dat$A ,
+  colMeans(s$M) ,
+  ylim = c(-2, 2) ,
+  type = "l" ,
+  xlab = "manipulated A" ,
+  ylab = "counterfactual M"
+)
+shade(apply(s$M, 2, PI) , sim_dat$A)
+mtext("Total counterfactual effect of A on M")
+
+# new counterfactual-- manipulate M 
+# new DAG bc if we manipulate M, A doesn't influence it
+DMA_dag3 <- dagitty('dag{ M -> D <- A }')
+coordinates(DMA_dag3) <- list(x = c(A = 0, D = 1, M = 2) , y = c(A = 0, D =
+                                                                 1, M = 0))
+drawdag(DMA_dag3)
+
+# simulate counterfactual result for an average state (A=0) & change M
+sim_dat <- data.frame(M = seq(
+  from       = -2,
+  to         = 2,
+  length.out = 30
+) , A        = 0)
+
+s <- sim(m5.3_A , data = sim_dat , vars = "D")
+
+plot(
+  sim_dat$M ,
+  colMeans(s) ,
+  ylim = c(-2, 2) ,
+  type = "l" ,
+  xlab = "manipulated M" ,
+  ylab = "counterfactual D"
+)
+shade(apply(s, 2, PI) , sim_dat$M)
+mtext("Total counterfactual effect of M on D")
