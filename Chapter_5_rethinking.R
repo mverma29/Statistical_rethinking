@@ -566,3 +566,65 @@ plot(precis(m5.10 , depth = 2 , pars = "a") ,
 
 
 
+
+
+# week 2 HW: 
+
+# Q1
+data(Howell1)
+d <- Howell1
+d2 <- d[d$age >=18, ]
+Hbar <- mean(d2$height)
+dat <- list(W=d2$weight, H=d2$height, Hbar=Hbar)
+
+m1 <- quap(alist(
+  W ~ dnorm(mu , sigma) ,
+  mu <- a + b * (H - Hbar),
+  a ~ dnorm(60 , 10) ,
+  b ~ dlnorm(0 , 1) ,
+  sigma ~ dunif(0 , 10)
+),
+data = dat)
+
+# need sim to predict (not just link)
+dat2 <- list(H = c(140,160,175), Hbar=Hbar)
+h_sim <- sim(m1, data=dat2)
+Ew <- apply(h_sim, 2, mean)
+h_ci <- apply(h_sim, 2, PI, prob=0.89)
+
+# make into a table 
+datr <- cbind(H = c(140, 160, 175),
+              Ew,
+              L89 = h_ci[1, ],
+              U89 = h_ci[2, ])
+round(datr,1)
+
+# Q2
+d3 <- d[d$age <13, ]
+# age = A
+# height = H 
+# weight = W
+
+# sim from priors
+n <- 10
+a <- rnorm(n,5,1) # avg bwt is 5 kg 
+b <- rlnorm(n,0,1) # relationship must be positive (log)
+# plot priors
+plot(NULL, xlim=range(d$age), ylim=range(d$weight), 
+     xlab="age", ylab="weight")
+for (i in 1:n) abline(a[i], b[i], lwd=3, col=2)
+
+
+m2 <- quap(alist(
+  W ~ dnorm(mu , sigma) ,
+  mu <- a + b*A ,
+  a ~ dnorm(5 , 10) ,
+  b ~ dlnorm(0 , 1) ,
+  sigma ~ dexp(1)
+) ,
+data = list(W=d3$weight, A=d3$age))
+precis(m2)
+
+# Q3 
+
+
