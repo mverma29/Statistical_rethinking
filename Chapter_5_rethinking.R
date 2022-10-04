@@ -519,5 +519,50 @@ precis(post , depth = 2)
 # calc is called a contrast
 # we have post dist of the difference! 
 
+# many categories---- 
+# primate milk ex again
+# clade variable (taxonomic)
+
+data(milk)
+d <- milk
+unique(d$clade)
+
+# coerce the factor to an integer to index into 4 categories
+d$clade_id <- as.integer(d$clade)
+
+# model quad approx of posterior
+d$K <- scale(d$kcal.per.g) # standardize K again
+
+m5.9 <- quap(alist(K ~ dnorm(mu , sigma),
+                   mu <- a[clade_id],
+                   a[clade_id] ~ dnorm(0 , 0.5), # wider this time
+                   sigma ~ dexp(1)) , data = d)
+
+# plot means 
+labels <- paste("a[" , 1:4 , "]:" , levels(d$clade) , sep = "")
+plot(precis(m5.9 , depth = 2 , pars = "a") ,
+     labels = labels ,
+     xlab = "expected kcal (std)")
+
+# can add another type of categorical variable to model in same way
+set.seed(63)
+d$house <- sample(rep(1:4, each = 8) , size = nrow(d))
+
+# add to model 
+m5.10 <- quap(alist(
+  K ~ dnorm(mu , sigma),
+  mu <- a[clade_id] + h[house],
+  a[clade_id] ~ dnorm(0 , 0.5),
+  h[house] ~ dnorm(0 , 0.5),
+  sigma ~ dexp(1)
+) ,
+data = d)
+
+labels <- paste("a[" , 1:4 , "]:" , levels(d$house) , sep = "")
+plot(precis(m5.10 , depth = 2 , pars = "a") ,
+     labels = labels ,
+     xlab = "expected kcal (std)")
+
+
 
 
