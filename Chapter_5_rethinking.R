@@ -312,3 +312,174 @@ plot(
 )
 shade(apply(s, 2, PI) , sim_dat$M)
 mtext("Total counterfactual effect of M on D")
+
+
+# masked relationship---- 
+
+library(rethinking)
+data(milk)
+d <- milk
+str(d)
+
+# standardize vars in question
+# outcome is kcal per gram milk  
+d$K <- scale(d$kcal.per.g) # kcal per g of milk 
+d$N <- scale(d$neocortex.perc) # neocortex percent of brain mass
+d$M <- scale(log(d$mass)) # avg female body mass
+
+# first try to run the model with vague priors 
+m5.5_draft <- quap(alist(
+  K ~ dnorm(mu , sigma) ,
+  mu <- a + bN * N ,
+  a ~ dnorm(0 , 1) ,
+  bN ~ dnorm(0 , 1) ,
+  sigma ~ dexp(1)
+) ,
+data = d)
+# error message-- missing values in N variable 
+# complete case analysis 
+dcc <- d[complete.cases(d$K, d$N, d$M) ,]
+
+# try model again using cc analysis data frame
+m5.5_draft <- quap(alist(
+  K ~ dnorm(mu , sigma) ,
+  mu <- a + bN * N ,
+  a ~ dnorm(0 , 1) ,
+  bN ~ dnorm(0 , 1) ,
+  sigma ~ dexp(1)
+) ,
+data = dcc)
+
+# simulate & plot 50 prior regression lines 
+prior <- extract.prior(m5.5_draft)
+xseq <- c(-2, 2)
+mu <- link(m5.5_draft , post = prior , data = list(N = xseq))
+plot(NULL , xlim = xseq , ylim = xseq)
+for (i in 1:50)
+  lines(xseq , mu[i, ] , col = col.alpha("black", 0.3))
+# crazy priors! 
+
+# try again, making a prior closer to 0 
+# (so outcome will be closer to 0) and tighten
+# slope of bN so it doesn't produce impossibly strong relationships
+m5.5 <- quap(alist(
+  K ~ dnorm(mu , sigma) ,
+  mu <- a + bN * N ,
+  a ~ dnorm(0 , 0.2) ,
+  bN ~ dnorm(0 , 0.5) ,
+  sigma ~ dexp(1)
+) ,
+data = dcc)
+
+# plot these revised priors
+prior <- extract.prior(m5.5)
+xseq <- c(-2, 2)
+mu <- link(m5.5 , post = prior , data = list(N = xseq))
+plot(NULL , xlim = xseq , ylim = xseq)
+for (i in 1:50)
+  lines(xseq , mu[i, ] , col = col.alpha("black", 0.3))
+# better (but still vague) priors
+# stays within high prob region of observable data 
+
+# look at model output table
+precis(m5.5)
+
+# plot predicted mean and 89% compatibility interval for mean
+xseq    <-
+  seq(
+    from       = min(dcc$N) - 0.15 ,
+    to         = max(dcc$N) + 0.15 ,
+    length.out = 30
+  )
+mu      <- link(m5.5 , data = list(N = xseq))
+mu_mean <- apply(mu, 2, mean)
+mu_PI   <- apply(mu, 2, PI)
+
+plot(K ~ N , data = dcc)
+lines(xseq , mu_mean , lwd = 2)
+shade( mu_PI , xseq )
+# weakly positive post mean
+# highly imprecise 
+
+# now, let's consider bivariate relationship btw. kcal & body mass
+m5.6 <- quap(alist(
+  K ~ dnorm(mu , sigma) ,
+  mu <- a + bM * M ,
+  a ~ dnorm(0 , 0.2) ,
+  bM ~ dnorm(0 , 0.5) ,
+  sigma ~ dexp(1)
+) ,
+data = dcc)
+
+precis(m5.6)
+
+# plot predicted mean and 89% compatibility interval for mean
+xseq    <-
+  seq(
+    from       = min(dcc$M) - 0.15 ,
+    to         = max(dcc$M) + 0.15 ,
+    length.out = 30
+  )
+mu      <- link(m5.6 , data = list(M = xseq))
+mu_mean <- apply(mu, 2, mean)
+mu_PI   <- apply(mu, 2, PI)
+
+plot(K ~ M , data = dcc)
+lines(xseq , mu_mean , lwd = 2)
+shade( mu_PI , xseq )
+
+
+# add BOTH predictor variables at same time to regression 
+# approx posterior dist
+m5.7 <- quap(alist(
+  K ~ dnorm(mu , sigma) ,
+  mu <- a + bN * N + bM * M ,
+  a ~ dnorm(0 , 0.2) ,
+  bN ~ dnorm(0 , 0.5) ,
+  bM ~ dnorm(0 , 0.5) ,
+  sigma ~ dexp(1)
+) ,
+data = dcc)
+
+precis(m5.7)
+
+# compare this posterior to that of models m5.5 and m5.6
+plot(coeftab(m5.5 , m5.6 , m5.7) , pars = c("bM", "bN"))
+
+# are N & M correlated? 
+pairs (~K + M + N, dcc) #yes 
+
+# make counterfactual plots (shows how model sees problem)
+
+# holding N=0
+xseq <-
+  seq(
+    from       = min(dcc$M) - 0.15 ,
+    to         = max(dcc$M) + 0.15 ,
+    length.out = 30
+  )
+mu <- link(m5.7 , data = data.frame(M = xseq , N = 0))
+mu_mean <- apply(mu, 2, mean)
+mu_PI <- apply(mu, 2, PI)
+
+plot(NULL , xlim = range(dcc$M) , ylim = range(dcc$K))
+lines(xseq , mu_mean , lwd = 2)
+shade(mu_PI , xseq)
+
+# holding M=0
+xseq <-
+  seq(
+    from       = min(dcc$N) - 0.15 ,
+    to         = max(dcc$N) + 0.15 ,
+    length.out = 30
+  )
+mu <- link(m5.7 , data = data.frame(N = xseq , M = 0))
+mu_mean <- apply(mu, 2, mean)
+mu_PI <- apply(mu, 2, PI)
+
+plot(NULL , xlim = range(dcc$N) , ylim = range(dcc$K))
+lines(xseq , mu_mean , lwd = 2)
+shade(mu_PI , xseq)
+
+
+
