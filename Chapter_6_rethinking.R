@@ -59,4 +59,54 @@ precis(m6.2)
 
 
 
-# multicollinear milk 
+# multicollinear milk ex-----
+
+data(milk)
+d <- milk
+d$K <- scale(d$kcal.per.g)
+d$F <- scale(d$perc.fat)
+d$L <- scale(d$perc.lactose)
+
+# kcal.per.g regressed on perc.fat
+m6.3 <- quap(alist(
+  K ~ dnorm(mu , sigma) ,
+  mu <- a + bF*F ,
+  a ~ dnorm(0 , 0.2) ,
+  bF ~ dnorm(0 , 0.5) ,
+  sigma ~ dexp(1)
+) ,
+data = d)
+
+# kcal.per.g regressed on perc.lactose
+m6.4 <- quap(alist(
+  K ~ dnorm(mu , sigma) ,
+  mu <- a + bL*L ,
+  a ~ dnorm(0 , 0.2) ,
+  bL ~ dnorm(0 , 0.5) ,
+  sigma ~ dexp(1)
+) ,
+data = d)
+
+precis(m6.3) # the more fat, the more kcal in milk
+precis(m6.4) # the more lactose, the less kcal in milk 
+
+# regress kcal on both! 
+m6.5 <- quap(alist(
+  K ~ dnorm(mu , sigma) ,
+  mu <- a + bF * F + bL * L ,
+  a ~ dnorm(0 , 0.2) ,
+  bF ~ dnorm(0 , 0.5) ,
+  bL ~ dnorm(0 , 0.5) ,
+  sigma ~ dexp(1)
+),
+data = d)
+
+precis(m6.5) # post means of both bF and bL are closer to 0, SDs are 2x as large
+# percent lactose & percent fat contain too much of the same info! 
+
+# check correlation using a pairs plot
+pairs (~kcal.per.g + perc.fat + perc.lactose, data=d, col=rangi2)
+# perc fat & perc lactose are strongly neg correlated with each other! 
+
+
+
