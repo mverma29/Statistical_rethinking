@@ -110,3 +110,179 @@ pairs (~kcal.per.g + perc.fat + perc.lactose, data=d, col=rangi2)
 
 
 
+
+
+# post-treatment effect: plant fungus example----
+
+set.seed(71)
+# number of plants
+N <- 100
+# simulate initial heights
+h0 <- rnorm(N, 10, 2)
+# assign treatments and simulate fungus and growth
+treatment <- rep(0:1 , each = N / 2)
+fungus <- rbinom(N , size = 1 , prob = 0.5 - treatment * 0.4)
+h1 <- h0 + rnorm(N, 5 - 3 * fungus)
+
+# compose a clean data frame
+d <-
+  data.frame(
+    h0 = h0 ,
+    h1 = h1 ,
+    treatment = treatment ,
+    fungus = fungus
+  )
+
+precis(d)
+
+# prior dist of proportion parameter: log-normal(0,0.25)
+# because we expect the proportion of plant's initial height to be always positive
+# (as it is a proportion) and generally larger than 1 
+sim_p <- rlnorm(1e4 , 0 , 0.25)
+precis(data.frame(sim_p))
+# expects ~ 40% shrinkage to 50% growth, mean is 4% growth 
+
+# fit this linear height of plant model (p is, proportion of plant initial height)
+m6.6 <- quap(alist(h1 ~ dnorm(mu , sigma),
+                   mu <- h0 * p,
+                   p ~ dlnorm(0 , 0.25),
+                   sigma ~ dexp(1)), data = d)
+precis(m6.6) # on average, 40% growth
+
+
+# fit the model with the treatment & fungus parameters too
+# approx the posterior 
+m6.7 <- quap(
+  alist(
+    h1 ~ dnorm(mu , sigma),
+    mu <- h0 * p,
+    p <- a + bt * treatment + bf * fungus,
+    a ~ dlnorm(0 , 0.2) ,
+    bt ~ dnorm(0 , 0.5),
+    bf ~ dnorm(0 , 0.5),
+    sigma ~ dexp(1)
+  ),
+  data = d
+)
+precis(m6.7) # no effect of treatment on height
+
+# try again, omitting fungus
+m6.8 <- quap(
+  alist(
+    h1 ~ dnorm(mu , sigma),
+    mu <- h0 * p,
+    p <- a + bt * treatment,
+    a ~ dlnorm(0 , 0.2),
+    bt ~ dnorm(0 , 0.5),
+    sigma ~ dexp(1)
+  ),
+  data = d
+)
+precis(m6.8) # impact of treatment is now positive
+
+# DAG of these relationships
+library(dagitty)
+plant_dag <- dagitty("dag {
+    H_0 -> H_1
+    F -> H_1
+    T -> F
+}")
+
+coordinates(plant_dag) <- list(x = c(
+  H_0 = 0,
+  T = 2,
+  F = 1.5,
+  H_1 = 1
+),
+y = c(
+  H_0 = 0,
+  T = 0,
+  F = 0,
+  H_1 = 0
+))
+
+drawdag(plant_dag)
+
+impliedConditionalIndependencies(plant_dag)
+
+# unobserved variable (moisture) example, influences final plant height & fungus
+set.seed(71)
+N <- 1000
+h0 <- rnorm(N, 10, 2)
+treatment <- rep(0:1 , each = N / 2)
+M <- rbern(N)
+fungus <- rbinom(N , size = 1 , prob = 0.5 - treatment * 0.4 + 0.4 * M)
+h1 <- h0 + rnorm(N , 5 + 3 * M)
+d2 <-
+  data.frame(
+    h0 = h0 ,
+    h1 = h1 ,
+    treatment = treatment ,
+    fungus = fungus)
+
+# re-run m6.7 and 6.8 now
+# fit the model with the treatment & fungus parameters too
+# approx the posterior 
+m6.7 <- quap(
+  alist(
+    h1 ~ dnorm(mu , sigma),
+    mu <- h0 * p,
+    p <- a + bt * treatment + bf * fungus,
+    a ~ dlnorm(0 , 0.2) ,
+    bt ~ dnorm(0 , 0.5),
+    bf ~ dnorm(0 , 0.5),
+    sigma ~ dexp(1)
+  ),
+  data = d2
+)
+precis(m6.7) # no effect of treatment on height
+
+# try again, omitting fungus
+m6.8 <- quap(
+  alist(
+    h1 ~ dnorm(mu , sigma),
+    mu <- h0 * p,
+    p <- a + bt * treatment,
+    a ~ dlnorm(0 , 0.2),
+    bt ~ dnorm(0 , 0.5),
+    sigma ~ dexp(1)
+  ),
+  data = d2
+)
+precis(m6.8) # impact of treatment is now positive
+
+
+# collider bias ex: happiness and age, conditioning on marriage----
+
+library(rethinking)
+d <- sim_happiness( seed=1977 , N_years=1000 )
+precis(d)
+
+# rescale age so that the range 18-65 is one unit 
+d2 <- d[d$age > 17 ,] # only adults
+d2$A <- (d2$age - 18) / (65 - 18) # ranges from 0-1, 0=18 1=65
+
+d2$mid <- d2$married + 1 # mid= married index variable (1=single, 2=married)
+
+m6.9 <- quap(alist(
+  happiness ~ dnorm(mu , sigma),
+  mu <- a[mid] + bA*A,
+  a[mid] ~ dnorm(0 , 1), # 95% of mass in the -2 to +2 interval of happiness
+  bA ~ dnorm(0 , 2), #95% of plausible slopes are less than maximally strong
+  sigma ~ dexp(1)
+) ,
+data = d2)
+
+precis(m6.9, depth = 2)
+
+# try a model that omits marriage status 
+m6.10 <- quap(alist(
+  happiness ~ dnorm(mu , sigma),
+  mu <- a + bA * A,
+  a ~ dnorm(0 , 1),
+  bA ~ dnorm(0 , 2),
+  sigma ~ dexp(1)
+) ,
+data = d2)
+precis(m6.10) # no association between age and happiness 
+
