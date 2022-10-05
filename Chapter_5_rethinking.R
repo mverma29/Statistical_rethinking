@@ -40,7 +40,7 @@ plot( NULL , xlim=c(-2,2) , ylim=c(-2,2) )
 for ( i in 1:50 ) lines( c(-2,2) , mu[i,] , col=col.alpha("black",0.4) )
 
 # posterior predictions 
-# compute percentile interval of mean 5.5
+# compute percentile interval of mean
 A_seq <- seq(from           = -3 ,
              to             = 3.2 ,
              length.out     = 30)
