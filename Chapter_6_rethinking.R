@@ -3,6 +3,8 @@
 # Megan Verma 
 # 10/6/2022
 
+library(rethinking)
+
 # multicollinear legs ex----
 
 N <- 100 #number of individuals
@@ -285,4 +287,81 @@ m6.10 <- quap(alist(
 ) ,
 data = d2)
 precis(m6.10) # no association between age and happiness 
+
+# unknown collider bias ex: grandparents, parents, children-----
+
+N <- 200 # number of grandparent-parent-child triads
+b_GP <- 1 # direct effect of G on P
+b_GC <- 0 # direct effect of G on C
+b_PC <- 1 # direct effect of P on C
+b_U <- 2 # direct effect of U on P and C
+
+# draw random observations 
+set.seed(1)
+U <- 2*rbern( N , 0.5 ) - 1
+G <- rnorm( N )
+P <- rnorm( N , b_GP*G + b_U*U )
+C <- rnorm( N , b_PC*P + b_GC*G + b_U*U )
+d <- data.frame( C=C , P=P , G=G , U=U )
+
+# model, controlling for parents
+m6.11 <- quap(alist(
+  C ~ dnorm(mu , sigma),
+  mu <- a + b_PC * P + b_GC * G,
+  a ~ dnorm(0 , 1),
+  c(b_PC, b_GC) ~ dnorm(0 , 1),
+  sigma ~ dexp(1)
+),
+data = d)
+precis(m6.11) # effect of parents is too big (2x as big as it should)
+
+# how do we fix this?
+# must measure and condition on unknown (u)
+
+m6.12 <- quap(
+  alist(
+    C ~ dnorm(mu , sigma),
+    mu <- a + b_PC * P + b_GC * G + b_U * U,
+    a ~ dnorm(0 , 1),
+    c(b_PC, b_GC, b_U) ~ dnorm(0 , 1),
+    sigma ~ dexp(1)
+  ),
+  data = d
+)
+precis(m6.12)
+
+# DAG showing what to condition on 
+library(dagitty)
+dag_6.1 <- dagitty("dag {
+U [unobserved]
+X -> Y
+X <- U <- A -> C -> Y
+U -> B <- C
+}")
+adjustmentSets(dag_6.1 , exposure = "X" , outcome = "Y")
+# condition on either A or C 
+
+
+# waffle house divorce extended DAG 
+dag_6.2 <- dagitty("dag {
+A -> D
+A -> M -> D
+A <- S -> M
+S -> W -> D
+}")
+adjustmentSets(dag_6.2 , exposure = "W" , outcome = "D")
+# what are the conditional independencies?
+impliedConditionalIndependencies(dag_6.2)
+
+# DAG question 1 medium: showing what to condition on 
+dag_6.3 <- dagitty("dag {
+U [unobserved]
+X -> Y
+X <- U <- A -> C -> Y
+U -> B <- C
+C <- V -> Y
+}")
+adjustmentSets(dag_6.3 , exposure = "X" , outcome = "Y")
+# condition on either C and V or A 
+
 
