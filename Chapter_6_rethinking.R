@@ -365,3 +365,90 @@ adjustmentSets(dag_6.3 , exposure = "X" , outcome = "Y")
 # condition on either C and V or A 
 
 
+
+
+# week 3 HW probs:-------------
+# Q1
+
+library(rethinking)
+data(foxes)
+d <- foxes
+
+# standardize variables
+d$F <- scale(d$avgfood)
+d$G <- scale(d$groupsize)
+d$A <- scale(d$area)
+d$W <- scale(d$weight)
+
+summary(d)
+
+
+# model average food as a function of area
+m1<- quap(
+  alist(
+    F ~ dnorm(mu , sigma) ,
+    mu <- a + bA*A,
+    a ~ dnorm(0 , 0.2) ,
+    bA ~ dnorm(0 ,0.5) ,
+    sigma ~ dexp(1)
+  ),
+  data = d
+)
+precis(m1) 
+# 1 SD of change in area results in 
+# 0.9 changes in SD of food availability
+
+# Q2
+
+# causal influence of F on W (no backdoor paths)
+m2<- quap(
+  alist(
+    W ~ dnorm(mu , sigma) ,
+    mu <- a + bF*F,
+    a ~ dnorm(0 , 0.2) ,
+    bF ~ dnorm(0 ,0.5) ,
+    sigma ~ dexp(1)
+  ),
+  data = d
+)
+precis(m2) # very small effect(-0.2)
+
+# direct effect of F on W 
+# model weight (W) as a function of avgfood (F), 
+# control for/stratify on groupsize (G)
+
+m2b<- quap(
+  alist(
+    W ~ dnorm(mu , sigma) ,
+    mu <- a + bF*F + bG*G,
+    a ~ dnorm(0 , 0.2) ,
+    bF ~ dnorm(0 ,0.5) ,
+    bG ~ dnorm(0 ,0.5) ,
+    sigma ~ dexp(1)
+  ),
+  data = d
+)
+precis(m2b) 
+# 1 SD of change in F results in 0.5 SD of change in W, 
+# after accounting for effect of groupsize 
+# 1 SD of change in G results in -0.5 SD of change in W, 
+# after accounting for effect of avgfood 
+
+# adding more food directly effects weight, but the path through
+# group size cancels that out 
+# check this by modelling causal effect of food on group size
+
+m2c<- quap(
+  alist(
+    G ~ dnorm(mu , sigma) ,
+    mu <- a + bF*F,
+    a ~ dnorm(0 , 0.2) ,
+    bF ~ dnorm(0 ,0.5) ,
+    sigma ~ dexp(1)
+  ),
+  data = d
+)
+precis(m2c) # 1 SD of change in F results in 0.9 SD of change in G
+# more food= more foxes
+# so that means more foxes attracted to food so there's
+# no effect on individual fox weight
