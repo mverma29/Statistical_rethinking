@@ -229,6 +229,13 @@ lines(mass_seq , mu)
 shade(ci , mass_seq)
 # R2 is 1-- perfect fit 
 
+# log-probability scores for models-----
 
+set.seed(1)
+lppd(m7.1 , n = 1e4)
 
-
+# for all models in this chapter 
+set.seed(1)
+sapply(list(m7.1, m7.2, m7.3, m7.4, m7.5, m7.6) , function(m)
+  sum(lppd(m)))
+# more complex models have larger scores! 
