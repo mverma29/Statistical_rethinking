@@ -211,3 +211,226 @@ trankplot(m9.5)
 
 
 
+
+
+
+
+# week 4 HW: 
+# Q1------
+
+library(rethinking)
+d <- sim_happiness( seed=1977 , N_years=1000 )
+precis(d)
+
+# rescale age so that the range 18-65 is one unit 
+d2 <- d[d$age > 17 ,] # only adults
+d2$A <- (d2$age - 18) / (65 - 18) # ranges from 0-1, 0=18 1=65
+
+d2$mid <- d2$married + 1 # mid= married index variable (1=single, 2=married)
+
+m6.9 <- quap(alist(
+  happiness ~ dnorm(mu , sigma),
+  mu <- a[mid] + bA*A,
+  a[mid] ~ dnorm(0 , 1), # 95% of mass in the -2 to +2 interval of happiness
+  bA ~ dnorm(0 , 2), #95% of plausible slopes are less than maximally strong
+  sigma ~ dexp(1)
+) ,
+data = d2)
+
+precis(m6.9, depth = 2)
+
+# try a model that omits marriage status 
+m6.10 <- quap(alist(
+  happiness ~ dnorm(mu , sigma),
+  mu <- a + bA * A,
+  a ~ dnorm(0 , 1),
+  bA ~ dnorm(0 , 2),
+  sigma ~ dexp(1)
+) ,
+data = d2)
+precis(m6.10) # no association between age and happiness
+
+# PSIS and WAIC of m6.9 and m6.10
+compare(m6.9 , m6.10)
+compare(m6.9 , m6.10, func = PSIS)
+# according to these criteria, m6.9 is expected to make better predictions
+# would interpret as negative (non-causal) effect of age on happiness
+
+
+# Q2-----
+
+library(rethinking)
+data(foxes)
+d <- foxes
+
+# standardize variables
+d$F <- scale(d$avgfood)
+d$G <- scale(d$groupsize)
+d$A <- scale(d$area)
+d$W <- scale(d$weight)
+
+summary(d)
+
+# different models to predict weight 
+
+# m1: F on W
+m1<- quap(
+  alist(
+    W ~ dnorm(mu , sigma) ,
+    mu <- a + bF*F,
+    a ~ dnorm(0 , 0.2) ,
+    bF ~ dnorm(0 ,0.5) ,
+    sigma ~ dexp(1)
+  ),
+  data = d
+)
+precis(m1) # very small effect(-0.2)
+
+# m2: G on W 
+m2<- quap(
+  alist(
+    W ~ dnorm(mu , sigma) ,
+    mu <- a + bG*G,
+    a ~ dnorm(0 , 0.2) ,
+    bG ~ dnorm(0 ,0.5) ,
+    sigma ~ dexp(1)
+  ),
+  data = d
+)
+precis(m2) # 
+
+
+# m3: A on W 
+m3<- quap(
+  alist(
+    W ~ dnorm(mu , sigma) ,
+    mu <- a + bA*A,
+    a ~ dnorm(0 , 0.2) ,
+    bA ~ dnorm(0 ,0.5) ,
+    sigma ~ dexp(1)
+  ),
+  data = d
+)
+precis(m3) #
+
+
+# m4: F and G on W 
+m4<- quap(
+  alist(
+    W ~ dnorm(mu , sigma) ,
+    mu <- a + bF*F + bG*G,
+    a ~ dnorm(0 , 0.2) ,
+    bF ~ dnorm(0 ,0.5) ,
+    bG ~ dnorm(0 ,0.5) ,
+    sigma ~ dexp(1)
+  ),
+  data = d
+)
+precis(m4) 
+
+
+# m5: F, G and A on W 
+m5<- quap(
+  alist(
+    W ~ dnorm(mu , sigma) ,
+    mu <- a + bF*F + bA*A + bG*G,
+    a ~ dnorm(0 , 0.2) ,
+    bF ~ dnorm(0 ,0.5) ,
+    bA ~ dnorm(0 ,0.5) ,
+    bG ~ dnorm(0 ,0.5) ,
+    sigma ~ dexp(1)
+  ),
+  data = d
+)
+precis(m5)
+
+
+# m6: A and G on W 
+m6<- quap(
+  alist(
+    W ~ dnorm(mu , sigma) ,
+    mu <- a + bA*A + bG*G,
+    a ~ dnorm(0 , 0.2) ,
+    bA ~ dnorm(0 ,0.5) ,
+    bG ~ dnorm(0 ,0.5) ,
+    sigma ~ dexp(1)
+  ),
+  data = d
+)
+precis(m6)
+
+compare(m1, m2, m3, m4, m5, m6)
+compare(m1, m2, m3, m4, m5, m6, func=PSIS)
+# m5 is best scoring model: F and G on W 
+# F has a pos relationship with W 
+# A has a pos relationship with W 
+# G has a negative relationship with W (greater magnitude than F's relationship)
+
+# Q3-----
+
+data("cherry_blossoms")
+d <- cherry_blossoms
+summary(d)
+
+# predict doy with temp (consider 2 functions)
+
+# standardize variables
+d$D <- standardize(d$doy)
+d$T <- standardize(d$temp)
+
+# drop cases with NA 
+dd <- d[complete.cases(d$D, d$T), ]
+
+summary(dd)
+
+# different models to predict doy 
+
+# m1: intercept only 
+m1<- quap(
+  alist(
+    D ~ dnorm(mu , sigma) ,
+    mu <- a,
+    a ~ dnorm(0 , 10) ,
+    sigma ~ dexp(1)
+  ),
+  data = list(D=dd$D, T=dd$T)
+)
+precis(m1)
+
+# m2: T on D
+m2<- quap(
+  alist(
+    D ~ dnorm(mu , sigma) ,
+    mu <- a + bT*T,
+    a ~ dnorm(0 , 10) ,
+    bT ~ dnorm(0 , 10) ,
+    sigma ~ dexp(1)
+  ),
+  data = list(D=dd$D, T=dd$T)
+)
+precis(m2)
+
+# m3: T^2 on D 
+m3<- quap(
+  alist(
+    D ~ dnorm(mu , sigma) ,
+    mu <- a + b1*T + + b2*T,
+    a ~ dnorm(0 , 10) ,
+    c(b1,b2) ~ dnorm(0 , 10) ,
+    sigma ~ dexp(1)
+  ),
+  data = list(D=dd$D, T=dd$T)
+)
+precis(m3)
+
+compare(m1, m2, m3)
+compare(m1, m2, m3, func=PSIS)
+# m3 is better (on basis of WAIC, PSIS)
+
+Tval <- (9- mean(d$temp, na.rm=TRUE))/sd(d$temp, na.rm=TRUE)
+D_sim <- sim(m2, data = list(T=Tval))
+# put back on natural scale 
+doy_sim <- D_sim*sd(d$doy, na.rm = TRUE) + mean(d$doy, na.rm=TRUE)
+dens(doy_sim, lwd=4, col=2, xlab="day in year 1st bloom")
+abline(v=89, lty=1)
+dens(d$doy, add=TRUE, lwd=3)
