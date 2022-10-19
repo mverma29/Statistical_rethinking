@@ -517,3 +517,206 @@ lambda_new <- exp( post$a + post$b )
 
 precis( data.frame( lambda_old , lambda_new ) )
 
+
+# multinomial models ex: career choice (predictors mateched to outcomes)------
+
+# simulate career choices among 500 individuals
+N <- 500             # number of individuals
+income <- c(1, 2, 5)   # expected income of each career
+score <- 0.5 * income  # scores for each career, based on income
+# next line converts scores to probabilities
+p <- softmax(score[1], score[2], score[3])
+# now simulate choice
+# outcome career holds event type values, not counts
+career <- rep(NA, N)  # empty vector of choices for each individual
+# sample chosen career for each individual
+set.seed(34302)
+for (i in 1:N)
+  career[i] <- sample(1:3 , size = 1 , prob = p)
+
+# fit the model (in stan)
+code_m11.13 <- "
+data{
+    int N; // number of individuals
+    int K; // number of possible careers
+    int career[N]; // outcome
+    vector[K] career_income;
+}
+parameters{
+    vector[K-1] a; // intercepts
+    real<lower=0> b; // association of income with choice
+} model{
+    vector[K] p;
+    vector[K] s;
+    a ~ normal( 0 , 1 );
+    b ~ normal( 0 , 0.5 );
+    s[1] = a[1] + b*career_income[1];
+    s[2] = a[2] + b*career_income[2];
+    s[3] = 0; // pivot
+    p = softmax( s );
+    career ~ categorical( p );
+} "
+
+# set up data list and invoke stan
+dat_list <- list(
+  N = N ,
+  K = 3 ,
+  career = career ,
+  career_income = income
+)
+m11.13 <-
+  stan(
+    model_code = code_m11.13 ,
+    data = dat_list ,
+    chains = 4,
+    cores = 4
+  )
+precis(m11.13 , 2)
+
+# conduct a counterfactual simulation
+# extract the samples and make our own-- imagine doubling the income of career 2
+
+post <- extract.samples(m11.13)
+# set up logit scores
+s1 <- with(post , a[, 1] + b * income[1])
+s2_orig <- with(post , a[, 2] + b * income[2])
+s2_new <- with(post , a[, 2] + b * income[2] * 2)
+# compute probabilities for original and counterfactual
+p_orig <- sapply(1:length(post$b) , function(i)
+  softmax(c(s1[i], s2_orig[i], 0)))
+p_new <- sapply(1:length(post$b) , function(i)
+  softmax(c(s1[i], s2_new[i], 0)))
+# summarize
+p_diff <- p_new[2, ] - p_orig[2, ]
+precis(p_diff)
+
+# multinomial models ex: career choice (predictors matched to observations)------
+
+# effect of family income on a person's choice of career
+# predictor variabel has the same value for each linear model, for each row of data
+# unique parameter multiplying it in each linear model 
+
+N <- 500
+# simulate family incomes for each individual
+family_income <- runif(N)
+# assign a unique coefficient for each type of event
+b <- c(-2, 0, 2)
+career <- rep(NA, N)  # empty vector of choices for each individual
+for (i in 1:N) {
+  score <- 0.5 * (1:3) + b * family_income[i]
+  p <- softmax(score[1], score[2], score[3])
+  career[i] <- sample(1:3 , size = 1 , prob = p)
+}
+
+
+# fit model
+code_m11.14 <- "
+data{
+    int N; // number of observations
+    int K; // number of outcome values
+    int career[N]; // outcome
+    real family_income[N];
+}
+parameters{
+    vector[K-1] a; // intercepts
+    vector[K-1] b; // coefficients on family income
+} model{
+    vector[K] p;
+    vector[K] s;
+    a ~ normal(0,1.5);
+    b ~ normal(0,1);
+    for ( i in 1:N ) {for ( j in 1:(K-1) ) s[j] = a[j] + b[j]*family_income[i];
+s[K] = 0; // the pivot
+p = softmax( s );
+career[i] ~ categorical( p );
+} }
+"
+
+dat_list <-
+  list(
+    N = N ,
+    K = 3 ,
+    career = career ,
+    family_income = family_income
+  )
+
+m11.14 <- stan(
+  model_code = code_m11.14 ,
+  data = dat_list ,
+  chains = 4,
+  cores = 4
+)
+precis(m11.14 , 2)
+
+
+# UCB admissions data as multinomial in disguise as Poisson -------
+
+
+library(rethinking)
+data(UCBadmit)
+d <- UCBadmit
+
+# binomial model of overall admission probability
+m_binom <- quap(alist(admit ~ dbinom(applications, p),
+                      logit(p) <- a,
+                      a ~ dnorm(0 , 1.5)), data = d)
+
+# Poisson model of overall admission rate and rejection rate
+# 'reject' is a reserved word in Stan, cannot use as variable name
+dat <- list(admit = d$admit , rej = d$reject)
+m_pois <- ulam(
+  alist(
+    admit ~ dpois(lambda1),
+    rej ~ dpois(lambda2),
+    log(lambda1) <- a1,
+    log(lambda2) <- a2,
+    c(a1, a2) ~ dnorm(0, 1.5)
+  ),
+  data = dat ,
+  chains = 3 ,
+  cores = 3
+)
+
+# inferred binomial prob of admission 
+inv_logit(coef(m_binom))
+
+# Poisson model implied prob of admission 
+k <- coef(m_pois)
+a1 <- k['a1']
+a2 <- k['a2']
+exp(a1)/(exp(a1)+exp(a2))
+
+# censoring and survival example-----
+
+library(rethinking)
+data(AustinCats)
+d <- AustinCats
+d$adopt <- ifelse(d$out_event == "Adoption" , 1L , 0L)
+dat <- list(
+  days_to_event = as.numeric(d$days_to_event),
+  color_id = ifelse(d$color == "Black" , 1L , 2L) ,
+  adopted = d$adopt
+)
+
+m11.15 <- ulam(
+  alist(
+    days_to_event | adopted == 1 ~ exponential(lambda),
+    days_to_event |
+      adopted == 0 ~ custom(exponential_lccdf(!Y | lambda)),
+    lambda <- 1.0 / mu,
+    log(mu) <- a[color_id],
+    a[color_id] ~ normal(0, 1)
+  ),
+  data = dat ,
+  chains = 4 ,
+  cores = 4
+)
+precis(m11.15 , 2)
+
+# avg time to adoption
+post <- extract.samples(m11.15)
+post$D <- exp(post$a)
+precis(post , 2)
+
+log(0.35)
+exp(3.2)
