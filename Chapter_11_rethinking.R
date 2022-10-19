@@ -718,5 +718,6 @@ post <- extract.samples(m11.15)
 post$D <- exp(post$a)
 precis(post , 2)
 
-log(0.35)
-exp(3.2)
+log(0.35/(1-0.35))
+inv_logit(3.2)
+exp(1.7)
