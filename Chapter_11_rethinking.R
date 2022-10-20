@@ -721,3 +721,52 @@ precis(post , 2)
 log(0.35/(1-0.35))
 inv_logit(3.2)
 exp(1.7)
+
+
+
+# brms example: aggregated binomial grad admissions-----
+packages <- c("ape", "bayesplot", "brms", "broom", "dagitty", "devtools", 
+              "flextable", "GGally", "ggdag", "ggdark", "ggmcmc", "ggrepel",
+              "ggthemes", "ggtree", "ghibli", "gtools", "invgamma", "loo",
+              "patchwork", "posterior", "psych", "rcartocolor", "Rcpp", 
+              "remotes", "rstan", "santoku", "StanHeaders", "statebins", 
+              "tidybayes", "tidyverse", "viridis", "viridisLite", "wesanderson")
+
+install.packages(packages, dependencies = T)
+library(tidyverse)
+library(brms)
+#load data
+data(UCBadmit, package = "rethinking")
+d <- UCBadmit
+rm(UCBadmit)
+
+d
+
+# compute index variable, case variable for row # as factor
+
+d <- 
+  d %>%  
+  mutate(gid  = factor(applicant.gender, levels = c("male", "female")),
+         case = factor(1:n()))
+# in rethinking, we used indices for gender
+# here, we used ordered factor -- brms can handle both but output here is easier
+
+b11.7 <-
+  brm(data = d, 
+      family = binomial,
+      admit | trials(applications) ~ 0 + gid,
+      prior(normal(0, 1.5), class = b),
+      iter = 2000, warmup = 1000, cores = 4, chains = 4,
+      seed = 11,
+     ) 
+
+print(b11.7)
+
+# compute the difference score in 2 metrics & summarize 
+as_draws_df(b11.7) %>% 
+  mutate(diff_a = b_gidmale - b_gidfemale,
+         diff_p = inv_logit_scaled(b_gidmale) - inv_logit_scaled(b_gidfemale)) %>% 
+  pivot_longer(contains("diff")) %>% 
+  group_by(name) %>% 
+  mean_qi(value, .width = .89)
+
